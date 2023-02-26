@@ -15,7 +15,10 @@ local function Load()
   Library:AddSlider {
     Text = "Slider",
     Flag = "MySlider",
-    Value = 0,
+    
+    MaxValue = 100,
+    MinValue = 1,
+    Value = 90,
     
     Callback = print,
     Arguments = {"Slider"}
@@ -34,4 +37,4 @@ local function Load()
 end
 
 local Elapsed = tick() - Load()
-print(string.format("[%s] Loaded in %.2f seconds", -Elapsed))
+print(string.format("[%s] Loaded in %.2f seconds", tostring(script), -Elapsed))
