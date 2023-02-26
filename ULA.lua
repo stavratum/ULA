@@ -8,12 +8,16 @@ xpcall(
 local RGB = {}
 local H = 0
 
+local InputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
 
 local LP = Players.LocalPlayer
 local Mouse = LP:GetMouse()
+local X = Mouse.ViewSizeX
+local Y = Mouse.ViewSizeY
 
 local Instance = Instance.new
 local Vector2 = Vector2.new
@@ -22,34 +26,41 @@ local UDim2 = UDim2
 local Color3 = Color3
 local Enum = Enum
 
+local math = math
+local table = table
+local string = string
+
+local pcall = pcall
+local ipairs = ipairs
+local tostring = tostring
+
 local Library = {
+	Flags = {},
 	Colors = {
 		Color3.fromRGB(25, 25, 25), -- UI 
 		Color3.fromRGB(30, 30, 30), -- Backgrounds
 		Color3.fromRGB(35, 35, 35), -- Objects
+	},
+	BlacklistedInput = {
+		[Enum.KeyCode.RightShift] = true
 	}
 }
 
 function Library:Init()
-	_G.connections[#_G.connections + 1] =
-		game:GetService("RunService").RenderStepped:Connect(function(dt)
-			if H > 1 then H = 0 end
-			
-			H = H + dt * 0.1
-			local color = Color3.fromHSV(H, 0.8, 1)
-
-			for i,v in ipairs(RGB) do
-				v.BackgroundColor3 = color
-			end
-		end)
+	local Blur = Instance("BlurEffect")
+	Blur.Name = tostring(Library)
+	Blur.Parent = Lighting
+	Blur.Size = 0
 
 	local UI = Instance("ScreenGui")
 	UI.Name = "UI"
+	UI.Enabled = false
 	
 	local Base, Moved = Instance("Frame")
 	Base.Name = "Base"
 	Base.Parent = UI
 	Base.BackgroundColor3 = self.Colors[1]
+	Base.Position = UDim2.new(0, X / 16, 0, Y / 16)
 	Base.Size = UDim2.new(0, 350, 0, 230)
 	Base.InputBegan:Connect(function(inputObject)
 		if inputObject.UserInputType ~= Enum.UserInputType.MouseButton1 then
@@ -86,7 +97,7 @@ function Library:Init()
 	Objects.Position = UDim2.new(0.5, 0, 0.5, 0)
 	Objects.Size = UDim2.new(0, 340, 0, 220)
 	Objects.BottomImage = ""
-	Objects.ScrollBarThickness = 2
+	Objects.ScrollBarThickness = 0
 	Objects.TopImage = ""
 
 	xpcall(
@@ -102,10 +113,11 @@ function Library:Init()
 			aos = aos + object.Size.Y.Offset
 		end
 
-		return (#objects + 1) * 8 + aos
+		return (#objects) * 8 + aos
 	end
 
 	function _G:quit()
+		Blur:Destroy()
 		UI:Destroy()
 
 		for i,v in ipairs(self.connections) do
@@ -115,7 +127,10 @@ function Library:Init()
 		table.clear(self.connections)
 	end
 
-	function self:MakeButton(text)
+	function self:AddButton(options)
+		options.Text = tostring(options.Text)
+		options.Arguments = options.Arguments or {}
+
 		local Button = Instance("TextButton")
 		Button.Name = "Button"
 		Button.Parent = Objects
@@ -124,16 +139,32 @@ function Library:Init()
 		Button.Position = UDim2.new(0.5, 0, 0, calc())
 		Button.Size = UDim2.new(0, 320, 0, 26)
 		Button.Font = Enum.Font.RobotoMono
-		Button.Text = text
+		Button.Text = options.Text
 		Button.TextColor3 = Color3.fromRGB(255, 255, 255)
 		Button.TextSize = 16
+		Button.InputBegan:Connect(function(inputObject)
+			if inputObject.UserInputType ~= Enum.UserInputType.MouseButton1 then
+				return 
+			end
+
+			pcall(options.Callback, unpack(options.Arguments))
+		end)
 
 		local UICorner = Instance("UICorner")
 		UICorner.CornerRadius = UDim(0, 4)
 		UICorner.Parent = Button
+
+		return options
 	end
 
-	function self:MakeToggle(text)
+	function self:AddToggle(options)
+		options.Text = tostring(options.Text)
+		options.Flag = options.Flag or options.Text
+		options.Arguments = options.Arguments or {}
+		options.Value = options.Value or false
+
+		self.Flags[options.Flag] = options.Value
+
 		local Toggle = Instance("TextButton")
 		Toggle.Name = "Toggle"
 		Toggle.Parent = Objects
@@ -142,25 +173,34 @@ function Library:Init()
 		Toggle.Position = UDim2.new(0.5, 0, 0, calc())
 		Toggle.Size = UDim2.new(0, 320, 0, 26)
 		Toggle.Font = Enum.Font.RobotoMono
-		Toggle.Text = text .. " [false]"
+		Toggle.Text = options.Text .. " ["..tostring(options.Value).."]"
 		Toggle.TextColor3 = Color3.fromRGB(255, 255, 255)
 		Toggle.TextSize = 16
 		Toggle.MouseButton1Click:Connect(function()
-			local state = not Object.Value
-			Object.Value = state
-			Object.Instance.Text = text .. " ["..tostring(state).."]"
+			local state = not self.Flags[options.Flag]
+
+			self.Flags[options.Flag] = state
+			Toggle.Text = string.format("%s [%s]", options.Text, tostring(state))
+
+			pcall(options.Callback, unpack(options.Arguments))
 		end)
 		
 		local UICorner = Instance("UICorner")
 		UICorner.CornerRadius = UDim(0, 4)
 		UICorner.Parent = Toggle
+
+		return options
 	end
 
-	function self:MakeSlider(options)
-		options.Text = options.Text or "Slider"
+	function self:AddSlider(options)
+		options.Text = tostring(options.Text)
+		options.Flag = options.Flag or options.Text
 		options.MinValue = options.MinValue or 0
 		options.MaxValue = options.MaxValue or 1
-		options.Value = options.Value or 0
+		options.Value = options.Value or options.MinValue
+		options.Arguments = options.Arguments or {}
+
+		self.Flags[options.Flag] = options.Value
 
 		local Slider = Instance("Frame")
 		Slider.Name = "Slider"
@@ -177,7 +217,7 @@ function Library:Init()
 		Bar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 		Bar.BorderSizePixel = 0
 		Bar.Position = UDim2.new(0.5, 0, 0.8, 0)
-		Bar.Size = UDim2.new(0, options.Value / options.MaxValue * 320, 0, 2)
+		Bar.Size = UDim2.new(0, options.Value / options.MaxValue * 310, 0, 2)
 	
 		local TextLabel = Instance("TextLabel")
 		TextLabel.Parent = Slider
@@ -202,59 +242,148 @@ function Library:Init()
 			end
 
 			local abs = Slider.AbsolutePosition
-			local pos = inputObject.Position.X - abs.X
+			local pos = inputObject.Position.X - abs.X - 8
 
 			local min = options.MinValue
 			local max = options.MaxValue
-			local value = pos / 310 * max
+			local value =
+				pos >= 300 and max or
+				pos <= 20 and min or
+				math.round(pos / 300 * max)
 
-			value = math.clamp(math.round(value), min, max)
+			self.Flags[options.Flag] = value
 
-			Bar.Size = UDim2.new(0, pos, 0, 2)
-			TextLabel.Text = options.Text .. " [" .. tostring(value).."]"
+			Bar.Size = UDim2.new(0, value / max * 310, 0, 2)
+			TextLabel.Text = string.format("%s [%s]", options.Text, tostring(value))
+
+			pcall(options.Callback, unpack(options.Arguments))
 		end)
 
 		RGB[#RGB + 1] = Bar
+
+		return options
 	end
 
-	function self:MakeKeybind(text) -- todo
+	function self:AddKeybind(options)
+		options.Text = tostring(options.Text)
+		options.Flag = options.Flag or options.Text
+		options.Arguments = options.Arguments or {}
+		options.Value = options.Value or Enum.KeyCode.Space
+
+		self.Flags[options.Flag] = options.Value
+
 		local Keybind = Instance("Frame")
 		Keybind.Name = "Keybind"
+		Keybind.Parent = Objects
+		Keybind.AnchorPoint = Vector2(0.5, 0)
 		Keybind.BackgroundColor3 = self.Colors[2]
+		Keybind.Position = UDim2.new(0.5, 0, 0, calc())
 		Keybind.Size = UDim2.new(0, 320, 0, 26)
-	
-		local Key = Instance("TextButton")
-		Key.Name = "Key"
-		Key.Parent = Keybind
-		Key.BackgroundColor3 = self.Colors[3]
-		Key.Size = UDim2.new(0, 60, 0, 26)
-		Key.Font = Enum.Font.RobotoMono
-		Key.Text = "[H]"
-		Key.TextColor3 = Color3.fromRGB(255, 255, 255)
-		Key.TextSize = 18
 	
 		local Identifier = Instance("TextLabel")
 		Identifier.Name = "Identifier"
 		Identifier.Parent = Keybind
 		Identifier.BackgroundColor3 = self.Colors[3]
-		Identifier.Size = UDim2.new(0, 250, 0, 26)
+		Identifier.Size = UDim2.new(0, 230, 0, 26)
 		Identifier.Font = Enum.Font.RobotoMono
-		Identifier.Text = text
+		Identifier.Text = options.Text
 		Identifier.TextColor3 = Color3.fromRGB(255, 255, 255)
 		Identifier.TextSize = 16
-	
+
+		local Key = Instance("TextButton")
+		Key.Name = "Key"
+		Key.Parent = Keybind
+		Key.BackgroundColor3 = self.Colors[3]
+		Key.Position = UDim2.new(0, 320 - 80, 0, 0)
+		Key.Size = UDim2.new(0, 80, 0, 26)
+		Key.Font = Enum.Font.RobotoMono
+		Key.Text = string.format("[%s]", options.Value.Name)
+		Key.TextColor3 = Color3.fromRGB(255, 255, 255)
+		Key.TextSize = 18
+		Key.MouseButton1Click:Connect(function()
+			local oldText = Key.Text
+			local key = nil
+
+			Key.Text = "[...]"
+
+			while not key do
+				local inputObject, gameProcessed = InputService.InputBegan:Wait()
+				local newKey = inputObject.KeyCode
+
+				if newKey == Enum.KeyCode.Escape then
+					Key.Text = oldText
+					return
+				end
+
+				if not gameProcessed and not self.BlacklistedInput[newKey] then
+					key = newKey
+				end
+			end
+
+			Key.Size = UDim2.new(0, 60, 0, 26)
+			Key.Text = string.format("[%s]", key.Name)
+			self.Flags[options.Flag] = key
+
+			repeat Key.Size = Key.Size + UDim2.new(0, 2, 0, 0) until Key.TextFits
+			Key.Position = UDim2.new(0, 320 - Key.Size.X.Offset, 0, 0)
+			Identifier.Size = UDim2.new(0, 310 - Key.Size.X.Offset, 0, 26)
+
+			pcall(options.Callback, unpack(options.Arguments))
+		end)
+
 		local UICorner = Instance("UICorner")
 		UICorner.CornerRadius = UDim(0, 4)
 		UICorner.Parent = Keybind
-	
-		local UICorner = Instance("UICorner")
-		UICorner.CornerRadius = UDim(0, 4)
-		UICorner.Parent = Key
-	
+
 		local UICorner = Instance("UICorner")
 		UICorner.CornerRadius = UDim(0, 4)
 		UICorner.Parent = Identifier
+
+		local UICorner = Instance("UICorner")
+		UICorner.CornerRadius = UDim(0, 4)
+		UICorner.Parent = Key
+
+		Key.Size = UDim2.new(0, 60, 0, 26)
+		Key.Text = string.format("[%s]", options.Value.Name)
+
+		repeat Key.Size = Key.Size + UDim2.new(0, 2, 0, 0) until Key.TextFits
+		Key.Position = UDim2.new(0, 320 - Key.Size.X.Offset, 0, 0)
+		Identifier.Size = UDim2.new(0, 310 - Key.Size.X.Offset, 0, 26)
+
+		return options
 	end
+
+	_G.connections[#_G.connections + 1] =
+		game:GetService("RunService").RenderStepped:Connect(function(dt)
+			if H > 1 then H = 0 end
+			
+			H = H + dt * 0.1
+			local color = Color3.fromHSV(H, 0.8, 1)
+
+			for i,v in ipairs(RGB) do
+				v.BackgroundColor3 = color
+			end
+		end)
+
+	_G.connections[#_G.connections + 1] =
+		InputService.InputBegan:Connect(function(inputObject, gameProcessed)
+			if gameProcessed then
+				return
+			end
+
+			if inputObject.UserInputType ~= Enum.UserInputType.Keyboard then
+				return 
+			end
+
+			if inputObject.KeyCode == Enum.KeyCode.RightShift then
+				local Enabled = not UI.Enabled
+				UI.Enabled = Enabled
+
+				TweenService:Create(Blur, TweenInfo.new(0.35), {Size = Enabled and 12 or 0}):Play()
+			end
+		end)
+
+	return UI
 end
 
 return Library
