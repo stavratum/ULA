@@ -34,6 +34,22 @@ local pcall = pcall
 local ipairs = ipairs
 local tostring = tostring
 
+local function fitin(instance)
+	repeat instance.Size += UDim2.new(0, 2)
+	until instance.TextFits
+end
+
+local function uiCorner(radius, instances)
+	local uiCorner = Instance("UICorner")
+	uiCorner.CornerRadius = radius
+	
+	for _,v in ipairs(instances) do
+		uiCorner:Clone().Parent = v
+	end
+
+	uiCorner:Destroy()
+end
+
 local Library = {
 	Flags = {},
 	Colors = {
@@ -42,16 +58,11 @@ local Library = {
 		Color3.fromRGB(35, 35, 35), -- Objects
 	},
 	BlacklistedInput = {
-		[Enum.KeyCode.RightShift] = true
+		Enum.KeyCode.RightShift
 	}
 }
 
 function Library:Init()
-	local Blur = Instance("BlurEffect")
-	Blur.Name = tostring(Library)
-	Blur.Parent = Lighting
-	Blur.Size = 0
-
 	local UI = Instance("ScreenGui")
 	UI.Name = "UI"
 	UI.Enabled = false
@@ -67,13 +78,18 @@ function Library:Init()
 			return
 		end
 
+		if Moved and Moved.Connected then 
+			return 
+		end
+
 		local Mx, My = Mouse.X, Mouse.Y
 
 		Moved = Mouse.Move:Connect(function()
 			local nMx, nMy = Mouse.X, Mouse.Y
 			local Dx, Dy = nMx - Mx, nMy - My
-			Base.Position = Base.Position + UDim2.fromOffset(Dx, Dy)
 			Mx, My = nMx, nMy
+
+			Base.Position += UDim2.fromOffset(Dx, Dy)
 		end)
 	end)
 	Base.InputEnded:Connect(function(inputObject)
@@ -83,10 +99,8 @@ function Library:Init()
 
 		Moved:Disconnect()
 	end)
-	
-	local UICorner = Instance("UICorner")
-	UICorner.CornerRadius = UDim(0, 2)
-	UICorner.Parent = Base
+
+	uiCorner(UDim(0, 2), {Base})
 	
 	local Objects = Instance("ScrollingFrame")
 	Objects.Name = "Objects"
@@ -94,50 +108,58 @@ function Library:Init()
 	Objects.AnchorPoint = Vector2(0.5, 0.5)
 	Objects.BackgroundColor3 = self.Colors[2]
 	Objects.BorderSizePixel = 0
-	Objects.Position = UDim2.new(0.5, 0, 0.5, 0)
+	Objects.Position = UDim2.new(0.5, 0, 0.5)
 	Objects.Size = UDim2.new(0, 340, 0, 220)
 	Objects.BottomImage = ""
 	Objects.ScrollBarThickness = 0
 	Objects.TopImage = ""
+
+	local Blur = Instance("BlurEffect")
+	Blur.Name = tostring(self)
+	Blur.Parent = Lighting
+	Blur.Size = 0
+
+	local UIListLayout = Instance("UIListLayout")
+	UIListLayout.Parent = Objects
+	UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	UIListLayout.Padding = UDim(0, 8)
+
+	local UIPadding = Instance("UIPadding")
+	UIPadding.Parent = Objects
+	UIPadding.PaddingBottom = UDim(0, 8)
+	UIPadding.PaddingTop = UDim(0, 8)
 
 	xpcall(
 		function() UI.Parent = game:GetService("CoreGui") end,
 		function() UI.Parent = LP.PlayerGui end
 	)
 
-	local function calc()
-		local objects = Objects:GetChildren()
-		local aos = 0
-
-		for _, object in ipairs(objects) do
-			aos = aos + object.Size.Y.Offset
-		end
-
-		return (#objects) * 8 + aos
-	end
-
 	function _G:quit()
 		Blur:Destroy()
 		UI:Destroy()
 
-		for i,v in ipairs(self.connections) do
-			v:Disconnect()
+		local connections = self.connections
+
+		for index, connection in next, connections do
+			connection:Disconnect()
+			connections[i] = nil
 		end
-	
-		table.clear(self.connections)
 	end
 
 	function self:AddButton(options)
 		options.Text = tostring(options.Text)
 		options.Arguments = options.Arguments or {}
 
-		local Button = Instance("TextButton")
+		local Button 
+		
+		Button = Instance("TextButton")
 		Button.Name = "Button"
 		Button.Parent = Objects
-		Button.AnchorPoint = Vector2(0.5, 0)
+		Button.AnchorPoint = Vector2(0.5)
 		Button.BackgroundColor3 = self.Colors[3]
-		Button.Position = UDim2.new(0.5, 0, 0, calc())
-		Button.Size = UDim2.new(0, 320, 0, 26)
+		Button.Position = UDim2.new(0.5)
+		Button.Size = UDim2.new(0, 320, 0, 30)
 		Button.Font = Enum.Font.RobotoMono
 		Button.Text = options.Text
 		Button.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -150,9 +172,7 @@ function Library:Init()
 			pcall(options.Callback, unpack(options.Arguments))
 		end)
 
-		local UICorner = Instance("UICorner")
-		UICorner.CornerRadius = UDim(0, 4)
-		UICorner.Parent = Button
+		uiCorner(UDim(0, 4), {Button})
 
 		return options
 	end
@@ -165,15 +185,17 @@ function Library:Init()
 
 		self.Flags[options.Flag] = options.Value
 
-		local Toggle = Instance("TextButton")
+		local Toggle
+
+		Toggle = Instance("TextButton")
 		Toggle.Name = "Toggle"
 		Toggle.Parent = Objects
-		Toggle.AnchorPoint = Vector2(0.5, 0)
+		Toggle.AnchorPoint = Vector2(0.5)
 		Toggle.BackgroundColor3 = self.Colors[3]
-		Toggle.Position = UDim2.new(0.5, 0, 0, calc())
-		Toggle.Size = UDim2.new(0, 320, 0, 26)
+		Toggle.Position = UDim2.new(0.5)
+		Toggle.Size = UDim2.new(0, 320, 0, 30)
 		Toggle.Font = Enum.Font.RobotoMono
-		Toggle.Text = options.Text .. " ["..tostring(options.Value).."]"
+		Toggle.Text = string.format("%s [%s]", options.Text, tostring(options.Value))
 		Toggle.TextColor3 = Color3.fromRGB(255, 255, 255)
 		Toggle.TextSize = 16
 		Toggle.MouseButton1Click:Connect(function()
@@ -185,9 +207,7 @@ function Library:Init()
 			pcall(options.Callback, unpack(options.Arguments))
 		end)
 		
-		local UICorner = Instance("UICorner")
-		UICorner.CornerRadius = UDim(0, 4)
-		UICorner.Parent = Toggle
+		uiCorner(UDim(0, 4), {Toggle})
 
 		return options
 	end
@@ -196,46 +216,23 @@ function Library:Init()
 		options.Text = tostring(options.Text)
 		options.Flag = options.Flag or options.Text
 		options.MinValue = options.MinValue or 0
-		options.MaxValue = options.MaxValue or 1
-		options.Value = options.Value or options.MinValue
+		options.MaxValue = options.MaxValue or 100
+		options.Value = options.Value or options.MaxValue
 		options.Arguments = options.Arguments or {}
 
 		self.Flags[options.Flag] = options.Value
 
-		local Slider = Instance("Frame")
+		local Slider
+		local Bar
+		local TextLabel
+
+		Slider = Instance("Frame")
 		Slider.Name = "Slider"
 		Slider.Parent = Objects
-		Slider.AnchorPoint = Vector2(0.5, 0)
+		Slider.AnchorPoint = Vector2(0.5)
 		Slider.BackgroundColor3 = self.Colors[3]
-		Slider.Position = UDim2.new(0.5, 0, 0, calc())
+		Slider.Position = UDim2.new(0.5)
 		Slider.Size = UDim2.new(0, 320, 0, 40)
-	
-		local Bar = Instance("Frame")
-		Bar.Name = "Bar"
-		Bar.Parent = Slider
-		Bar.AnchorPoint = Vector2(0.5, 0)
-		Bar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		Bar.BorderSizePixel = 0
-		Bar.Position = UDim2.new(0.5, 0, 0.8, 0)
-		Bar.Size = UDim2.new(0, options.Value / options.MaxValue * 310, 0, 2)
-	
-		local TextLabel = Instance("TextLabel")
-		TextLabel.Parent = Slider
-		TextLabel.BackgroundColor3 = self.Colors[3]
-		TextLabel.Size = UDim2.new(0, 320, 0, 26)
-		TextLabel.Font = Enum.Font.RobotoMono
-		TextLabel.Text = options.Text .. " [" .. tostring(options.Value).."]"
-		TextLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-		TextLabel.TextSize = 16
-	
-		local UICorner = Instance("UICorner")
-		UICorner.CornerRadius = UDim(0, 4)
-		UICorner.Parent = Slider
-	
-		local UICorner = Instance("UICorner")
-		UICorner.CornerRadius = UDim(0, 4)
-		UICorner.Parent = TextLabel
-
 		Slider.InputBegan:Connect(function(inputObject)
 			if inputObject.UserInputType ~= Enum.UserInputType.MouseButton1 then
 				return 
@@ -253,13 +250,32 @@ function Library:Init()
 
 			self.Flags[options.Flag] = value
 
-			Bar.Size = UDim2.new(0, value / max * 310, 0, 2)
+			Bar.Size = UDim2.new(0, value / max * 300, 0, 2)
 			TextLabel.Text = string.format("%s [%s]", options.Text, tostring(value))
 
 			pcall(options.Callback, unpack(options.Arguments))
 		end)
+	
+		Bar = Instance("Frame")
+		Bar.Name = "Bar"
+		Bar.Parent = Slider
+		Bar.AnchorPoint = Vector2(0.5, 0)
+		Bar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+		Bar.BorderSizePixel = 0
+		Bar.Position = UDim2.new(0.5, 0, 0.8)
+		Bar.Size = UDim2.new(0, options.Value / options.MaxValue * 300, 0, 2)
+	
+		TextLabel = Instance("TextLabel")
+		TextLabel.Parent = Slider
+		TextLabel.BackgroundColor3 = self.Colors[3]
+		TextLabel.Size = UDim2.new(0, 320, 0, 30)
+		TextLabel.Font = Enum.Font.RobotoMono
+		TextLabel.Text = string.format("%s [%s]", options.Text, tostring(options.Value))
+		TextLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+		TextLabel.TextSize = 16
 
-		RGB[#RGB + 1] = Bar
+		uiCorner(UDim(0, 4), {TextLabel, Slider})
+		table.insert(RGB, Bar)
 
 		return options
 	end
@@ -272,30 +288,34 @@ function Library:Init()
 
 		self.Flags[options.Flag] = options.Value
 
-		local Keybind = Instance("Frame")
+		local Keybind
+		local Identifier
+		local Key
+
+		Keybind = Instance("Frame")
 		Keybind.Name = "Keybind"
 		Keybind.Parent = Objects
 		Keybind.AnchorPoint = Vector2(0.5, 0)
 		Keybind.BackgroundColor3 = self.Colors[2]
-		Keybind.Position = UDim2.new(0.5, 0, 0, calc())
-		Keybind.Size = UDim2.new(0, 320, 0, 26)
+		Keybind.Position = UDim2.new(0.5)
+		Keybind.Size = UDim2.new(0, 320, 0, 30)
 	
-		local Identifier = Instance("TextLabel")
+		Identifier = Instance("TextLabel")
 		Identifier.Name = "Identifier"
 		Identifier.Parent = Keybind
 		Identifier.BackgroundColor3 = self.Colors[3]
-		Identifier.Size = UDim2.new(0, 230, 0, 26)
+		Identifier.Size = UDim2.new(0, 230, 0, 30)
 		Identifier.Font = Enum.Font.RobotoMono
 		Identifier.Text = options.Text
 		Identifier.TextColor3 = Color3.fromRGB(255, 255, 255)
 		Identifier.TextSize = 16
 
-		local Key = Instance("TextButton")
+		Key = Instance("TextButton")
 		Key.Name = "Key"
 		Key.Parent = Keybind
 		Key.BackgroundColor3 = self.Colors[3]
-		Key.Position = UDim2.new(0, 320 - 80, 0, 0)
-		Key.Size = UDim2.new(0, 80, 0, 26)
+		Key.Position = UDim2.new(0, 320 - 80)
+		Key.Size = UDim2.new(0, 80, 0, 30)
 		Key.Font = Enum.Font.RobotoMono
 		Key.Text = string.format("[%s]", options.Value.Name)
 		Key.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -315,49 +335,41 @@ function Library:Init()
 					return
 				end
 
-				if not gameProcessed and not self.BlacklistedInput[newKey] then
-					key = newKey
+				if gameProcessed or table.find(self.BlacklistedInput, newKey) then
+					return
 				end
+
+				key = newKey
 			end
 
-			Key.Size = UDim2.new(0, 60, 0, 26)
+			Key.Size = UDim2.new(0, 60, 0, 30)
 			Key.Text = string.format("[%s]", key.Name)
+			fitin(Key)
+
+			Key.Position = UDim2.new(0, 320 - Key.Size.X.Offset)
+			Identifier.Size = UDim2.new(0, 310 - Key.Size.X.Offset, 0, 30)
+
 			self.Flags[options.Flag] = key
-
-			repeat Key.Size = Key.Size + UDim2.new(0, 2, 0, 0) until Key.TextFits
-			Key.Position = UDim2.new(0, 320 - Key.Size.X.Offset, 0, 0)
-			Identifier.Size = UDim2.new(0, 310 - Key.Size.X.Offset, 0, 26)
-
 			pcall(options.Callback, unpack(options.Arguments))
 		end)
 
-		local UICorner = Instance("UICorner")
-		UICorner.CornerRadius = UDim(0, 4)
-		UICorner.Parent = Keybind
+		uiCorner(UDim(0, 4), {Identifier, Keybind, Key})
 
-		local UICorner = Instance("UICorner")
-		UICorner.CornerRadius = UDim(0, 4)
-		UICorner.Parent = Identifier
-
-		local UICorner = Instance("UICorner")
-		UICorner.CornerRadius = UDim(0, 4)
-		UICorner.Parent = Key
-
-		Key.Size = UDim2.new(0, 60, 0, 26)
+		Key.Size = UDim2.new(0, 60, 0, 30)
 		Key.Text = string.format("[%s]", options.Value.Name)
+		fitin(Key)
 
-		repeat Key.Size = Key.Size + UDim2.new(0, 2, 0, 0) until Key.TextFits
-		Key.Position = UDim2.new(0, 320 - Key.Size.X.Offset, 0, 0)
-		Identifier.Size = UDim2.new(0, 310 - Key.Size.X.Offset, 0, 26)
+		Key.Position = UDim2.new(0, 320 - Key.Size.X.Offset)
+		Identifier.Size = UDim2.new(0, 310 - Key.Size.X.Offset, 0, 30)
 
 		return options
 	end
 
 	_G.connections[#_G.connections + 1] =
-		game:GetService("RunService").RenderStepped:Connect(function(dt)
+		RunService.RenderStepped:Connect(function(dt)
 			if H > 1 then H = 0 end
 			
-			H = H + dt * 0.1
+			H += dt * 0.1
 			local color = Color3.fromHSV(H, 0.8, 1)
 
 			for i,v in ipairs(RGB) do
