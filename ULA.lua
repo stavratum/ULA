@@ -141,7 +141,7 @@ function Library:Init()
 
 		local connections = self.connections
 
-		for index, connection in next, connections do
+		for i, connection in next, connections do
 			connection:Disconnect()
 			connections[i] = nil
 		end
